@@ -83,6 +83,11 @@ Riavvia Claude Desktop e scrivi *"prova la connessione al calendario"*.
 - **Errore certificato/SSL** → il certificato non è valido/attendibile;
   usa un certificato valido oppure, solo su reti interne fidate, `EXCHANGE_VERIFY_SSL=false`.
 
+## Autore
+
+Sviluppato da **Diego Dal Lago** — dev@diegodallago.it
+
 ## Licenza
 
 MIT — vedi il file [LICENSE](LICENSE).
+Copyright (c) 2026 Diego Dal Lago.
