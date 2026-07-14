@@ -1,93 +1,125 @@
 # Exchange Calendar MCP (on-premise)
 
-Server **MCP** (Model Context Protocol) che collega Claude al calendario di
-**Microsoft Exchange Server on-premise** tramite l'endpoint **EWS**
-(Exchange Web Services), con autenticazione **NTLM**, in **sola lettura**.
-Dopo la configurazione puoi chiedere a Claude *"che appuntamenti ho oggi?"*,
-*"cosa ho la settimana prossima?"*, ecc.
+*[Versione italiana: README.it.md](README.it.md)*
 
-> **Compatibilità:** progettato per **Exchange Server on-premise** (2013/2016/2019)
-> con EWS abilitato e autenticazione **NTLM**. Non pensato per Exchange Online /
-> Microsoft 365 (che usa OAuth 2.0).
+An **MCP** (Model Context Protocol) server that connects Claude to an
+**on-premise Microsoft Exchange Server** calendar via the **EWS**
+(Exchange Web Services) endpoint, using **NTLM** authentication.
+**Read-only** by default; it can optionally **create, update and delete** appointments.
 
-> Sola lettura del calendario: il server non crea, modifica o cancella nulla.
+> **Compatibility:** designed for **on-premise Exchange Server** (2013/2016/2019)
+> with EWS enabled and **NTLM** authentication. Not intended for Exchange Online /
+> Microsoft 365 (which uses OAuth 2.0).
 
-## Strumenti esposti
+## Tools
 
-- `agenda_oggi` – appuntamenti di oggi
-- `prossimi_giorni` – appuntamenti dei prossimi N giorni
-- `lista_appuntamenti` – appuntamenti tra due date
-- `prova_connessione` – verifica credenziali ed endpoint EWS
+Read-only (always available):
+- `today_agenda` – today's appointments
+- `next_days` – appointments for the next N days
+- `list_appointments` – appointments between two dates
+- `test_connection` – check credentials and the EWS endpoint
 
-## Requisiti
+Write (only when `EXCHANGE_ENABLE_WRITE=true`):
+- `create_appointment` – create a new appointment (optionally with attendees)
+- `update_appointment` – update an existing appointment
+- `delete_appointment` – move an appointment to the Deleted Items folder (recoverable)
 
-- Python 3.10 o superiore
-- **Microsoft Exchange Server on-premise** (2013/2016/2019) con EWS attivo e autenticazione **NTLM**
+## Requirements
 
-## Installazione
+- Python 3.10 or newer
+- **On-premise Microsoft Exchange Server** (2013/2016/2019) with EWS enabled and **NTLM** authentication
+
+## Installation
 
 ```bash
-git clone https://github.com/<tuo-utente>/exchange-calendar-mcp.git
+git clone https://github.com/<your-user>/exchange-calendar-mcp.git
 cd exchange-calendar-mcp
 pip install -r requirements.txt
 ```
 
-## Configurazione
+## Configuration
 
-Copia `.env.example` in `.env` e compila i valori:
+1. Copy the **`env.example`** file and rename it to **`.env`** — that is, **add a dot
+   at the start of the name**. The leading dot makes it the hidden config file the
+   script actually reads.
+
+   ```bash
+   cp env.example .env
+   ```
+
+2. Open `.env` and fill in the values:
+
+   ```
+   EXCHANGE_EWS_URL=https://mail.example.com/EWS/Exchange.asmx
+   EXCHANGE_USERNAME=DOMAIN\user
+   EXCHANGE_PASSWORD=your_password
+   EXCHANGE_EMAIL=name.surname@example.com
+   EXCHANGE_TIMEZONE=Europe/Rome
+   EXCHANGE_VERIFY_SSL=true
+   EXCHANGE_ENABLE_WRITE=false
+   ```
+
+3. Register the server in the Claude Desktop config file
+   (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+   ```json
+   {
+     "mcpServers": {
+       "exchange-calendar": {
+         "command": "python3",
+         "args": ["/absolute/path/exchange-calendar-mcp/server.py"]
+       }
+     }
+   }
+   ```
+
+4. Restart Claude Desktop and type *"test the calendar connection"*.
+
+## Enabling write access (create / update / delete)
+
+The server is **read-only** by default. To enable the commands that modify the
+calendar, set in `.env`:
 
 ```
-EXCHANGE_EWS_URL=https://mail.esempio.com/EWS/Exchange.asmx
-EXCHANGE_USERNAME=DOMINIO\utente
-EXCHANGE_PASSWORD=la_tua_password
-EXCHANGE_EMAIL=nome.cognome@esempio.com
-EXCHANGE_TIMEZONE=Europe/Rome
-EXCHANGE_VERIFY_SSL=true
+EXCHANGE_ENABLE_WRITE=true
 ```
 
-Collega il server a Claude Desktop nel file di configurazione
-(`~/Library/Application Support/Claude/claude_desktop_config.json` su macOS):
+then restart Claude Desktop. Behaviour:
 
-```json
-{
-  "mcpServers": {
-    "exchange-calendar": {
-      "command": "python3",
-      "args": ["/percorso/assoluto/exchange-calendar-mcp/server.py"]
-    }
-  }
-}
-```
+- **Delete = Deleted Items.** Deleted appointments are moved to the "Deleted Items"
+  folder and are **recoverable**, not permanently erased.
+- **Invitations.** When you create or update an appointment with attendees, an
+  invitation/update email is sent to them; deletions send a cancellation.
+- To go back to read-only, set `EXCHANGE_ENABLE_WRITE=false` again.
 
-Riavvia Claude Desktop e scrivi *"prova la connessione al calendario"*.
+## Security
 
-## Sicurezza
-
-- **Nessun segreto nel repository.** Le credenziali stanno solo nel file `.env`
-  locale, che è escluso da Git tramite `.gitignore`. Non caricare mai il tuo `.env`.
-- **TLS attivo per default.** Il certificato del server viene verificato.
-  Imposta `EXCHANGE_VERIFY_SSL=false` **solo** con certificati self-signed interni.
-- **Sola lettura.** Il server non ha strumenti di scrittura sul calendario o sulla casella.
-- **Permessi del file .env** (consigliato su macOS/Linux):
+- **No secrets in the repository.** Credentials live only in the local `.env` file,
+  which is Git-ignored. Never commit your `.env`; only `env.example` goes on GitHub.
+- **TLS on by default.** The server certificate is verified.
+  Set `EXCHANGE_VERIFY_SSL=false` **only** for internal self-signed certificates.
+- **HTTPS required.** The server rejects `http://` endpoints so NTLM credentials
+  never travel in clear text (discouraged override: `EXCHANGE_ALLOW_INSECURE=true`).
+- **Write disabled by default.** The calendar-modifying commands exist only with
+  `EXCHANGE_ENABLE_WRITE=true`.
+- **Input limits.** Maximum query range of 366 days.
+- **.env permissions** (recommended on macOS/Linux):
   ```bash
   chmod 600 .env
   ```
-- Se pubblichi una tua istanza, considera l'uso di una casella/utenza dedicata
-  con i soli permessi necessari.
 
-## Risoluzione problemi
+## Troubleshooting
 
-- **"Credenziali mancanti"** → `.env` assente o non compilato.
-- **Errore 401** → username NTLM errato (`DOMINIO\utente`) o password sbagliata;
-  prova anche con l'indirizzo email completo come username.
-- **Errore certificato/SSL** → il certificato non è valido/attendibile;
-  usa un certificato valido oppure, solo su reti interne fidate, `EXCHANGE_VERIFY_SSL=false`.
+- **"Missing credentials"** → `.env` missing or empty (remember the leading dot).
+- **401 error** → wrong NTLM username (`DOMAIN\user`) or password; try the full
+  email address as the username.
+- **create/update/delete tools not showing** → `EXCHANGE_ENABLE_WRITE=true` is missing in `.env`.
 
-## Autore
+## Author
 
-Sviluppato da **Diego Dal Lago** — dev@diegodallago.it
+Developed by **Diego Dal Lago** — dev@diegodallago.it
 
-## Licenza
+## License
 
-MIT — vedi il file [LICENSE](LICENSE).
+MIT — see the [LICENSE](LICENSE) file.
 Copyright (c) 2026 Diego Dal Lago.
